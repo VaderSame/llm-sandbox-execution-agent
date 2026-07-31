@@ -8,27 +8,27 @@ from agent import create_agent_graph
 load_dotenv()
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the Execution Agent on a repository.")
-    parser.add_argument("repo_path", type=str, help="The absolute path to the repository directory to execute.")
-    parser.add_argument("--query", type=str, default="Please find and execute the main script in the repository.",
-                        help="Optional initial instruction to the agent regarding parameters or execution mode.")
+    parser = argparse.ArgumentParser(description="Run the Execution Agent on a workspace.")
+    parser.add_argument("workspace_path", nargs='?', default=".", type=str, help="The absolute path to the workspace directory (defaults to current directory).")
+    parser.add_argument("-i", "--interactive", action="store_true", help="Enable interactive mode for file writes.")
     args = parser.parse_args()
     
-    repo_path = os.path.abspath(args.repo_path)
+    if args.interactive:
+        os.environ["INTERACTIVE_MODE"] = "1"
+        print("Interactive mode enabled: You will be prompted before the agent edits files.")
     
-    if not os.path.isdir(repo_path):
-        print(f"Error: {repo_path} is not a valid directory.")
+    workspace_path = os.path.abspath(args.workspace_path)
+    
+    if not os.path.isdir(workspace_path):
+        print(f"Error: {workspace_path} is not a valid directory.")
         sys.exit(1)
-        
-    print(f"Starting execution agent for repository: {repo_path}")
-    if args.query != "Please find and execute the main script in the repository.":
-        print(f"Initial query: {args.query}")
         
     app = create_agent_graph()
     
     initial_state = {
-        "messages": [HumanMessage(content=args.query)],
-        "repo_path": repo_path,
+        "workspace_path": workspace_path,
+        "messages": [],
+        "repo_path": None,
         "execution_command": None
     }
     

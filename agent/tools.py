@@ -26,6 +26,15 @@ def read_file(filepath: str) -> str:
 def write_file(filepath: str, content: str) -> str:
     """Overwrites the given absolute filepath with the provided content. Use this to fix code bugs."""
     try:
+        if os.environ.get("INTERACTIVE_MODE") == "1":
+            print(f"\n[INTERACTIVE MODE] The agent wants to overwrite '{filepath}'.")
+            print("--- Proposed New Content ---")
+            print(content)
+            print("----------------------------")
+            user_input = input("Approve this change? [Y/n]: ")
+            if user_input.lower() not in ["", "y", "yes"]:
+                return f"Error: User denied the file modification for {filepath}."
+                
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         return f"Successfully wrote to {filepath}"
