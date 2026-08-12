@@ -16,67 +16,14 @@ def get_llm():
         temperature=0
     )
 
-def user_input_node(state: AgentState):
-    workspace = state["workspace_path"]
-    print(f"\n--- Workspace Explorer ---")
-    print(f"Scanning directories in: {workspace}\n")
-    
-    # Get all subdirectories (excluding hidden ones like .git)
-    repos = []
-    try:
-        for entry in os.listdir(workspace):
-            full_path = os.path.join(workspace, entry)
-            if os.path.isdir(full_path) and not entry.startswith("."):
-                repos.append(entry)
-    except Exception as e:
-        print(f"Error reading workspace: {e}")
-        return state
-
-    if not repos:
-        print("No valid repositories found in the workspace.")
-        return state
-
-    repos.sort()
-    for i, repo in enumerate(repos, 1):
-        print(f"{i}. {repo}")
-        
-    print("--------------------------")
-    
-    # Select repo
-    while True:
-        choice = input("Select a repository by number to set the project scope: ")
-        try:
-            choice_idx = int(choice) - 1
-            if 0 <= choice_idx < len(repos):
-                selected_repo = repos[choice_idx]
-                break
-            else:
-                print("Invalid number. Try again.")
-        except ValueError:
-            print("Please enter a valid number.")
-            
-    repo_path = os.path.join(workspace, selected_repo)
-    print(f"\nSelected Scope: {repo_path}")
-    
-    # Ask for instruction
-    default_query = "Please find and execute the main script in the repository."
-    query = input(f"What would you like the agent to do with this repository?\n[Default: {default_query}]: ")
-    
-    if not query.strip():
-        query = default_query
-        
-    # Update state
-    return {
-        "repo_path": repo_path,
-        "messages": [HumanMessage(content=query)]
-    }
+from langchain_core.runnables import RunnableConfig
 
 def agent_node(state: AgentState):
     llm = get_llm()
     tools = get_tools()
     llm_with_tools = llm.bind_tools(tools)
     
-    sys_msg = SystemMessage(content=f"""You are a code execution agent. You have access to a repository at: {state['repo_path']}
+    sys_msg = SystemMessage(content=f"""You are a code execution agent. You have access to a repository at: {state.get('repo_path')}
 
 Your primary task is to find the main entry point of this repository, figure out the required parameters, and submit it for execution.
 CRITICAL INSTRUCTIONS:
@@ -104,7 +51,7 @@ def debugger_node(state: AgentState):
     llm_with_tools = llm.bind_tools(tools)
     
     sys_msg = SystemMessage(content=f"""You are an expert Python debugger.
-The execution agent failed to run the code. You have access to the repository at: {state['repo_path']}
+The execution agent failed to run the code. You have access to the repository at: {state.get('repo_path')}
 
 CRITICAL INSTRUCTIONS:
 1. Analyze the traceback or error provided in the messages.
@@ -125,9 +72,11 @@ CRITICAL INSTRUCTIONS:
                 
     return {"messages": [response], "execution_command": execution_command}
 
-def execute_node(state: AgentState):
+def execute_node(state: AgentState, config: RunnableConfig):
     command = state.get("execution_command")
     repo_path = state.get("repo_path")
+    
+    emit_event = config.get("configurable", {}).get("emit_event", lambda t, p: None)
     
     if not command:
         return {"messages": [HumanMessage(content="No execution command was set.")], "execution_success": False}
@@ -144,10 +93,12 @@ def execute_node(state: AgentState):
             wrapped_command = f'sh -c "cd /sandbox/repo && {command}"'
             
             def stdout_callback(chunk: str):
+                emit_event("sandbox_output", {"stream": "stdout", "chunk": chunk})
                 sys.stdout.write(chunk)
                 sys.stdout.flush()
                 
             def stderr_callback(chunk: str):
+                emit_event("sandbox_output", {"stream": "stderr", "chunk": chunk})
                 sys.stderr.write(chunk)
                 sys.stderr.flush()
                 
@@ -158,6 +109,13 @@ def execute_node(state: AgentState):
                 on_stderr=stderr_callback
             )
             print("\n----------------------")
+            
+            emit_event("execution_result", {
+                "success": result.exit_code == 0,
+                "exit_code": result.exit_code,
+                "stdout": result.stdout,
+                "stderr": result.stderr
+            })
             
             if result.exit_code == 0 and not result.stderr:
                 # Even if exit code is 0, check if the script intercepted an error and printed it
@@ -176,4 +134,9 @@ def execute_node(state: AgentState):
                 
     except Exception as e:
         print(f"Failed to execute: {e}")
-        return {"messages": [HumanMessage(content=f"Execution failed: {e}\nPlease fix this issue and try again.")], "execution_success": False}
+        emit_event("execution_result", {
+            "success": False,
+            "exit_code": -1,
+            "error": str(e)
+        })
+        return {"messages": [HumanMessage(content=f"Fatal Infrastructure Error: {e}\nAborting execution.")], "execution_success": None}

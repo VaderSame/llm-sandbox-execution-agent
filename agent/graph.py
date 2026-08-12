@@ -3,13 +3,12 @@ from langgraph.prebuilt import ToolNode
 
 from .state import AgentState
 from .tools import get_tools
-from .nodes import user_input_node, agent_node, debugger_node, execute_node
+from .nodes import agent_node, debugger_node, execute_node
 
 def create_agent_graph():
     workflow = StateGraph(AgentState)
     
     # Add nodes
-    workflow.add_node("user_input", user_input_node)
     workflow.add_node("agent", agent_node)
     workflow.add_node("debugger", debugger_node)
     workflow.add_node("agent_tools", ToolNode(get_tools()))
@@ -17,8 +16,7 @@ def create_agent_graph():
     workflow.add_node("execute_node", execute_node)
 
     # Add edges
-    workflow.add_edge(START, "user_input")
-    workflow.add_edge("user_input", "agent")
+    workflow.add_edge(START, "agent")
     
     def agent_should_continue(state: AgentState):
         messages = state["messages"]
@@ -33,9 +31,11 @@ def create_agent_graph():
     workflow.add_edge("agent_tools", "agent")
     
     def route_execution(state: AgentState):
-        if state.get("execution_success"):
+        if state.get("execution_success") is True:
             return END
-        return "debugger"
+        elif state.get("execution_success") is False:
+            return "debugger"
+        return END
         
     workflow.add_conditional_edges("execute_node", route_execution, {END: END, "debugger": "debugger"})
     
@@ -52,8 +52,11 @@ def create_agent_graph():
     workflow.add_conditional_edges("debugger", debugger_should_continue, {"debugger_tools": "debugger_tools", "execute_node": "execute_node", END: END})
     workflow.add_edge("debugger_tools", "debugger")
 
+    from langgraph.checkpoint.memory import MemorySaver
+    checkpointer = MemorySaver()
+
     # Compile the workflow
-    app = workflow.compile()
+    app = workflow.compile(checkpointer=checkpointer)
     
     # --- Generate and save the Mermaid graph as a PNG ---
     try:

@@ -1,6 +1,8 @@
 import os
 from langchain_core.tools import tool
 
+from langgraph.types import interrupt
+
 @tool
 def list_directory(directory_path: str) -> str:
     """Lists files in the given absolute directory path."""
@@ -25,16 +27,19 @@ def read_file(filepath: str) -> str:
 @tool
 def write_file(filepath: str, content: str) -> str:
     """Overwrites the given absolute filepath with the provided content. Use this to fix code bugs."""
+    # Request approval from the frontend client instead of blocking terminal
+    # interrupt() raises a special exception to suspend the graph, so DO NOT wrap it in a blanket try/except
+    response = interrupt({
+        "type": "approval_required",
+        "filepath": filepath,
+        "content": content
+    })
+    
+    # response should be boolean depending on what we pass back to resume
+    if not response:
+        return f"Error: User denied the file modification for {filepath}."
+            
     try:
-        if os.environ.get("INTERACTIVE_MODE") == "1":
-            print(f"\n[INTERACTIVE MODE] The agent wants to overwrite '{filepath}'.")
-            print("--- Proposed New Content ---")
-            print(content)
-            print("----------------------------")
-            user_input = input("Approve this change? [Y/n]: ")
-            if user_input.lower() not in ["", "y", "yes"]:
-                return f"Error: User denied the file modification for {filepath}."
-                
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         return f"Successfully wrote to {filepath}"
