@@ -4,7 +4,7 @@ An autonomous, self-healing LangGraph ReAct agent that can explore, understand, 
 
 ## Overview
 
-The Execution Agent takes a `.zip` archive of a target repository via an HTTP API, extracts it to an isolated scratch workspace, explores its file structure, reads its documentation, and dynamically figures out how to run it. It utilizes `llm-sandbox` with a Docker backend to securely execute the code in an isolated environment without risking your host machine.
+The Execution Agent takes a repository name via an HTTP API, maps it to a shared `code_repo` workspace, explores its file structure, reads its documentation, and dynamically figures out how to run it. It utilizes `llm-sandbox` with a Docker backend to securely execute the code in an isolated environment without risking your host machine.
 
 Most importantly, it features a **Self-Healing Loop**: If the repository code crashes during execution, the agent intercepts the stack trace, debugs the code, permanently fixes the bug on the local filesystem, and retries execution until it succeeds!
 
@@ -12,7 +12,7 @@ This project is built as a **headless FastAPI service** that streams Server-Sent
 
 ## Features
 
-- 📂 **Zip Handoff**: Accepts codebase `.zip` uploads over HTTP and isolates each execution job in a clean temporary directory.
+- 📂 **Shared Workspace Handoff**: Operates directly on the shared `code_repo` directory, allowing seamless file synchronization with the Code Agent without compressing files over the network.
 - 🧠 **Autonomous Comprehension**: Reads `README.md`, `docs/`, and parses `argparse` implementations to figure out entry points and required parameters.
 - 🛡️ **Secure Execution**: Runs the target codebase in an isolated Docker container via `llm-sandbox`.
 - 🩺 **Self-Healing Execution**: Detects crashes and unhandled exceptions, uses LLM-powered reasoning to fix the underlying code bugs, and re-executes.
@@ -49,7 +49,7 @@ uvicorn server:app --host 0.0.0.0 --port 8000
 
 ### 2. API Endpoints
 
-- `POST /execution-jobs`: Accepts `multipart/form-data` with `repo_zip` (the codebase) and `instruction`. Creates a job and starts the agent in the background. Returns `{ "job_id": "..." }`.
+- `POST /execution-jobs`: Accepts form data with `repo_name` (the folder inside `code_repo`) and `instruction`. Creates a job and starts the agent in the background. Returns `{ "job_id": "..." }`.
 - `GET /execution-jobs/{job_id}/stream`: Connects to a Server-Sent Events (SSE) stream to receive live updates from the agent's brain and the execution sandbox.
 - `POST /execution-jobs/{job_id}/approval`: Accepts `{ "approved": true }` to resume the graph when it is paused waiting for permission to modify a file.
 - `GET /execution-jobs/{job_id}`: Polls the current status of the job.

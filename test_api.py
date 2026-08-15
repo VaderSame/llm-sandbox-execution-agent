@@ -23,14 +23,11 @@ def listen_to_stream(job_id):
                 payload = data.get("data", {})
                 
                 if event_type == "agent_turn":
-                    print(f"\n🧠 Agent (Node: {payload.get('node')}):")
+                    print(f"\nAgent (Node: {payload.get('node')}):")
                     if payload.get('content'):
                         print(f"Thought: {payload.get('content')}")
                     for tc in payload.get('tool_calls', []):
-                        print(f"🛠️  Calling Tool: {tc.get('name')} with args: {tc.get('args')}")
-                elif event_type == "tool_result":
-                    print(f"✅ Tool '{payload.get('tool_name')}' Result:")
-                    print(payload.get('result')[:200] + ("..." if len(payload.get('result', '')) > 200 else ""))
+                        print(f"Calling Tool: {tc.get('name')} with args: {tc.get('args')}")
                 elif event_type == "sandbox_output":
                     # Print raw output chunks directly
                     stream = payload.get("stream", "stdout")
@@ -41,25 +38,25 @@ def listen_to_stream(job_id):
                         sys.stderr.write(chunk)
                     sys.stdout.flush()
                 elif event_type == "approval_required":
-                    print(f"\n⚠️ APPROVAL REQUIRED:")
+                    print(f"\nAPPROVAL REQUIRED:")
                     print(f"Agent wants to write to {payload.get('filepath')}")
                     print("--- Content ---")
                     print(payload.get('content'))
                     print("---------------")
                     
                     # Programmatically auto-approve for testing!
-                    print("✅ Auto-approving request...")
+                    print("Auto-approving request...")
                     requests.post(
                         f"{API_BASE}/execution-jobs/{job_id}/approval", 
                         json={"approved": True}
                     )
                 elif event_type == "execution_result":
-                    print(f"\n🏁 Execution finished (Success: {payload.get('success')})")
+                    print(f"\nExecution finished (Success: {payload.get('success')})")
                 elif event_type == "job_completed":
-                    print("\n🎉 Job Completed!")
+                    print("\nJob Completed!")
                     break
                 elif event_type == "job_failed":
-                    print(f"\n❌ Job Failed: {payload.get('error')}")
+                    print(f"\nJob Failed: {payload.get('error')}")
                     break
             except json.JSONDecodeError:
                 pass
@@ -67,21 +64,15 @@ def listen_to_stream(job_id):
         print("Please install sseclient-py to run this script: pip install sseclient-py")
 
 def main():
-    # Use one of the existing repos from code_repo
-    repo_to_test = "code_repo/test_repo"
-    zip_path = "test_repo.zip"
-    
-    print(f"Zipping {repo_to_test}...")
-    shutil.make_archive("test_repo", 'zip', repo_to_test)
+    repo_to_test = "test_repo"
     
     print("Submitting job to FastAPI server...")
-    with open(zip_path, "rb") as f:
-        files = {"repo_zip": ("test_repo.zip", f, "application/zip")}
-        data = {
-            "instruction": "Please find and execute the main script. If it fails, fix the code.",
-            "chat_session_id": "test_session_1"
-        }
-        resp = requests.post(f"{API_BASE}/execution-jobs", files=files, data=data)
+    data = {
+        "repo_name": repo_to_test,
+        "instruction": "Please find and execute the main script. If it fails, fix the code.",
+        "chat_session_id": "test_session_1"
+    }
+    resp = requests.post(f"{API_BASE}/execution-jobs", data=data)
         
     if resp.status_code != 200:
         print("Failed to start job:", resp.text)

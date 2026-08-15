@@ -22,13 +22,7 @@ agent_app = create_agent_graph()
 # In-memory store for jobs
 jobs = {}
 
-def extract_zip(upload_file: UploadFile, dest_dir: str):
-    zip_path = os.path.join(dest_dir, "uploaded.zip")
-    with open(zip_path, "wb") as f:
-        f.write(upload_file.file.read())
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(dest_dir)
-    os.remove(zip_path)
+
 
 async def run_agent_job(job_id: str, input_data: dict, is_resume: bool = False):
     def emit_event(event_type: str, payload: dict):
@@ -86,24 +80,28 @@ async def run_agent_job(job_id: str, input_data: dict, is_resume: bool = False):
 @app.post("/execution-jobs")
 async def create_job(
     background_tasks: BackgroundTasks,
-    repo_zip: UploadFile = File(...),
+    repo_name: str = Form(...),
     instruction: str = Form(...),
     chat_session_id: str = Form(...)
 ):
     job_id = str(uuid.uuid4())
-    scratch_dir = tempfile.mkdtemp(prefix=f"exec_job_{job_id}_")
     
-    extract_zip(repo_zip, scratch_dir)
+    # Path to the shared code_repo directory
+    base_repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "code_repo"))
+    repo_path = os.path.join(base_repo_dir, repo_name)
+    
+    if not os.path.exists(repo_path):
+        raise HTTPException(status_code=400, detail=f"Repository '{repo_name}' not found in code_repo.")
     
     jobs[job_id] = {
         "status": "RUNNING",
         "queue": asyncio.Queue(),
-        "repo_path": scratch_dir,
+        "repo_path": repo_path,
         "chat_session_id": chat_session_id
     }
     
     initial_state = {
-        "repo_path": scratch_dir,
+        "repo_path": repo_path,
         "messages": [HumanMessage(content=instruction)]
     }
     

@@ -1,5 +1,10 @@
 import os
 import sys
+import warnings
+
+# Suppress paramiko CryptographyDeprecationWarning from llm-sandbox
+warnings.filterwarnings("ignore", module="paramiko")
+
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import END
@@ -94,13 +99,9 @@ def execute_node(state: AgentState, config: RunnableConfig):
             
             def stdout_callback(chunk: str):
                 emit_event("sandbox_output", {"stream": "stdout", "chunk": chunk})
-                sys.stdout.write(chunk)
-                sys.stdout.flush()
                 
             def stderr_callback(chunk: str):
                 emit_event("sandbox_output", {"stream": "stderr", "chunk": chunk})
-                sys.stderr.write(chunk)
-                sys.stderr.flush()
                 
             print("--- Sandbox Output ---")
             result = session.execute_command(
