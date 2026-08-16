@@ -34,8 +34,6 @@ agent_app = create_agent_graph()
 # In-memory store for jobs
 jobs = {}
 
-
-
 async def run_agent_job(job_id: str, input_data: dict, is_resume: bool = False):
     def emit_event(event_type: str, payload: dict):
         jobs[job_id]["queue"].put_nowait({"type": event_type, "data": payload})

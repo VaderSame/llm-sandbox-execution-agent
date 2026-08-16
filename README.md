@@ -40,12 +40,18 @@ This project is built as a **headless FastAPI service** that streams Server-Sent
 
 ## Usage
 
-### 1. Start the Server
-Start the Uvicorn ASGI server to expose the FastAPI endpoints:
+### 1. Start the Backend Server
+Start the Uvicorn ASGI server to expose the FastAPI endpoints. *(Use `--reload` during development to dynamically apply changes).*
 
 ```bash
-uvicorn server:app --host 0.0.0.0 --port 8000
+uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+### 2. Start the Frontend UI (Execution UI)
+The companion **Execution UI** application provides a rich React frontend to interact with the backend in real-time.
+1. Open a new terminal and navigate to the `Execution UI` directory.
+2. Run `npm run dev` to start the Vite server.
+3. Open `http://localhost:5173` to access the visual Repo Picker and chat transcript!
 
 ### 2. API Endpoints
 
