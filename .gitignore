@@ -1,3 +1,6 @@
 .vscode
 .env
-code_repo/
+
+code_repo
+./code_repo/
+./code_repo/*
