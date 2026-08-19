@@ -1,10 +1,15 @@
 import os
+from typing import Annotated
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
+from langgraph.prebuilt import InjectedState
 
 def get_safe_path(base_path: str, user_path: str) -> str:
     """Resolves a user-provided relative path safely within the base_path."""
+    if not base_path:
+        raise ValueError("Critical Error: base_path is missing")
+        
     if user_path.startswith("/sandbox/repo"):
         user_path = user_path.replace("/sandbox/repo", "").lstrip("/")
     if not user_path:
@@ -16,9 +21,9 @@ def get_safe_path(base_path: str, user_path: str) -> str:
     return resolved_path
 
 @tool
-def list_directory(directory_path: str, config: RunnableConfig) -> str:
+def list_directory(directory_path: str, state: Annotated[dict, InjectedState]) -> str:
     """Lists files in the given relative directory path. Use '.' for the root of the repository."""
-    repo_path = config.get("configurable", {}).get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     try:
         safe_dir = get_safe_path(repo_path, directory_path)
         if not os.path.isdir(safe_dir):
@@ -28,9 +33,9 @@ def list_directory(directory_path: str, config: RunnableConfig) -> str:
         return f"Error: {e}"
 
 @tool
-def read_file(filepath: str, config: RunnableConfig) -> str:
+def read_file(filepath: str, state: Annotated[dict, InjectedState]) -> str:
     """Reads the content of the given relative filepath. Use this to read documentation and code."""
-    repo_path = config.get("configurable", {}).get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     try:
         safe_file = get_safe_path(repo_path, filepath)
         if not os.path.isfile(safe_file):
@@ -41,9 +46,9 @@ def read_file(filepath: str, config: RunnableConfig) -> str:
         return f"Error: {e}"
 
 @tool
-def write_file(filepath: str, content: str, config: RunnableConfig) -> str:
+def write_file(filepath: str, content: str, config: RunnableConfig, state: Annotated[dict, InjectedState]) -> str:
     """Overwrites the given relative filepath with the provided content. Use this to fix code bugs."""
-    repo_path = config.get("configurable", {}).get("repo_path", "")
+    repo_path = state.get("repo_path", "")
     emit_event = config.get("configurable", {}).get("emit_event", lambda t, p: None)
     
     try:
