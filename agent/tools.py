@@ -3,54 +3,70 @@ from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
+def get_safe_path(base_path: str, user_path: str) -> str:
+    """Resolves a user-provided relative path safely within the base_path."""
+    if user_path.startswith("/sandbox/repo"):
+        user_path = user_path.replace("/sandbox/repo", "").lstrip("/")
+    if not user_path:
+        user_path = "."
+        
+    resolved_path = os.path.abspath(os.path.join(base_path, user_path))
+    if not resolved_path.startswith(base_path):
+        raise ValueError("Path escapes repository boundary")
+    return resolved_path
+
 @tool
-def list_directory(directory_path: str) -> str:
-    """Lists files in the given absolute directory path."""
+def list_directory(directory_path: str, config: RunnableConfig) -> str:
+    """Lists files in the given relative directory path. Use '.' for the root of the repository."""
+    repo_path = config.get("configurable", {}).get("repo_path", "")
     try:
-        if not os.path.isdir(directory_path):
+        safe_dir = get_safe_path(repo_path, directory_path)
+        if not os.path.isdir(safe_dir):
             return f"Error: {directory_path} is not a directory."
-        return "\n".join(os.listdir(directory_path))
+        return "\n".join(os.listdir(safe_dir))
     except Exception as e:
         return f"Error: {e}"
 
 @tool
-def read_file(filepath: str) -> str:
-    """Reads the content of the given absolute filepath. Use this to read READMEs, docs, and code files."""
+def read_file(filepath: str, config: RunnableConfig) -> str:
+    """Reads the content of the given relative filepath. Use this to read documentation and code."""
+    repo_path = config.get("configurable", {}).get("repo_path", "")
     try:
-        if not os.path.isfile(filepath):
+        safe_file = get_safe_path(repo_path, filepath)
+        if not os.path.isfile(safe_file):
             return f"Error: {filepath} is not a file."
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(safe_file, 'r', encoding='utf-8') as f:
             return f.read()
     except Exception as e:
         return f"Error: {e}"
 
 @tool
 def write_file(filepath: str, content: str, config: RunnableConfig) -> str:
-    """Overwrites the given absolute filepath with the provided content. Use this to fix code bugs."""
+    """Overwrites the given relative filepath with the provided content. Use this to fix code bugs."""
+    repo_path = config.get("configurable", {}).get("repo_path", "")
     emit_event = config.get("configurable", {}).get("emit_event", lambda t, p: None)
     
-    response = interrupt({
-        "type": "approval_required",
-        "filepath": filepath,
-        "content": content
-    })
+    try:
+        safe_file = get_safe_path(repo_path, filepath)
+    except Exception as e:
+        return f"Error resolving path: {e}"
     
-    # Emit the event so the frontend logs it, but don't pause the graph
+    # Emit the event so the frontend logs it, but don't pause the graph yet
     emit_event("approval_required", {
         "type": "approval_required",
-        "filepath": filepath,
+        "filepath": safe_file,
         "content": content
     })
     
     # Auto-approve
     response = True
     
-    # response should be boolean depending on what we pass back to resume
     if not response:
         return f"Error: User denied the file modification for {filepath}."
             
     try:
-        with open(filepath, 'w', encoding='utf-8') as f:
+        os.makedirs(os.path.dirname(safe_file), exist_ok=True)
+        with open(safe_file, 'w', encoding='utf-8') as f:
             f.write(content)
         return f"Successfully wrote to {filepath}"
     except Exception as e:

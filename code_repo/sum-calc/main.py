@@ -9,3 +9,4 @@ if __name__ == "__main__":
     total_sum, average = generate_report()
     print(f"Sum: {total_sum}")
     print(f"Average: {average}")
+    print(f"fuck U Rishabh, sike")

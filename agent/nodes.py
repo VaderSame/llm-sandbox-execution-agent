@@ -28,16 +28,19 @@ def agent_node(state: AgentState):
     tools = get_tools()
     llm_with_tools = llm.bind_tools(tools)
     
-    sys_msg = SystemMessage(content=f"""You are a code execution agent. You have access to a repository at: {state.get('repo_path')}
+    sys_msg = SystemMessage(
+        content=f"""You are a code execution agent. You are exploring a local repository.
 
-Your primary task is to find the main entry point of this repository, figure out the required parameters, and submit it for execution.
-CRITICAL INSTRUCTIONS:
-1. Always prioritize reading documentation files (e.g., README.md, docs/, USAGE.md) first to understand how to run the repository and what parameters are required.
-2. If documentation is lacking, read the code (like main.py) to deduce the required CLI arguments (e.g., from argparse).
-3. Once you know exactly what command to run (e.g. python /sandbox/repo/main.py --param value), use the `submit_for_execution` tool to submit the command.
-4. Note that the entire repository will be copied into `/sandbox/repo` inside the execution container, so format your commands assuming that path.
-5. DO NOT try to execute the code yourself, rely on submit_for_execution.
-""")
+                    Your primary task is to find the main entry point of this repository, figure out the required parameters, and submit it for execution.
+                    CRITICAL INSTRUCTIONS:
+                    1. ALWAYS use the `list_directory` tool first with `.` to see what files actually exist in the repository. Do not guess filenames like README.md.
+                    2. The read/write tools (`list_directory`, `read_file`, `write_file`) automatically operate inside the repository. You MUST provide ONLY relative paths (e.g. `.` or `main.py`).
+                    3. Read the documentation files (e.g., DOCUMENTATION.md) to understand how to run the repository and what parameters are required.
+                    4. Once you know exactly what command to run, use the `submit_for_execution` tool to submit the command.
+                    5. IMPORTANT: Your `submit_for_execution` command will run in a Docker sandbox where the repo is mounted at `/sandbox/repo`. 
+                    Therefore, ONLY inside the `submit_for_execution` command should you use the absolute path `/sandbox/repo` (e.g. `python /sandbox/repo/main.py --param value`). 
+                    DO NOT use `/sandbox/repo` in any other tools!
+                    """)
     
     messages = [sys_msg] + state["messages"]
     response = llm_with_tools.invoke(messages)
@@ -55,16 +58,21 @@ def debugger_node(state: AgentState):
     tools = get_tools()
     llm_with_tools = llm.bind_tools(tools)
     
-    sys_msg = SystemMessage(content=f"""You are an expert Python debugger.
-The execution agent failed to run the code. You have access to the repository at: {state.get('repo_path')}
+    sys_msg = SystemMessage(
+        content=f"""You are an expert Python debugger.
+                            The execution agent failed to run the code in the repository.
 
-CRITICAL INSTRUCTIONS:
-1. Analyze the traceback or error provided in the messages.
-2. Use the `read_file` tool to inspect the buggy code.
-3. Use the `write_file` tool to apply a fix to the local repository.
-4. When you believe the bug is fixed, use the `submit_for_execution` tool with the same execution command (or a modified one if the command itself was the issue) to test your fix.
-5. You must call `submit_for_execution` to resume the graph.
-""")
+                            CRITICAL INSTRUCTIONS:
+                            1. Analyze the traceback or error provided in the messages.
+                            2. The read/write tools (`list_directory`, `read_file`, `write_file`) automatically operate inside the repository. You MUST provide ONLY relative paths (e.g. `main.py`).
+                            3. Use the `read_file` tool to inspect the buggy code using its relative path.
+                            4. Use the `write_file` tool to apply a fix to the local repository using its relative path.
+                            5. When you believe the bug is fixed, use the `submit_for_execution` tool to test your fix.
+                            6. IMPORTANT: Your `submit_for_execution` command will run in a Docker sandbox where the repo is mounted at `/sandbox/repo`. 
+                                Therefore, ONLY inside the `submit_for_execution` command should you use the absolute path `/sandbox/repo` (e.g. `python /sandbox/repo/main.py`). 
+                                DO NOT use `/sandbox/repo` in any other tools!
+                            7. You must call `submit_for_execution` to resume the graph.
+        """)
     
     messages = [sys_msg] + state["messages"]
     response = llm_with_tools.invoke(messages)

@@ -41,7 +41,8 @@ async def run_agent_job(job_id: str, input_data: dict, is_resume: bool = False):
     config = {
         "configurable": {
             "thread_id": job_id, 
-            "emit_event": emit_event
+            "emit_event": emit_event,
+            "repo_path": jobs[job_id]["repo_path"]
         }
     }
     
@@ -302,5 +303,25 @@ async def get_repo_file(repo_name: str, path: str):
             return f.read()
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="Cannot read binary file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class FileUpdateRequest(BaseModel):
+    content: str
+
+@app.put("/repos/{repo_name}/file")
+async def update_repo_file(repo_name: str, path: str, request: FileUpdateRequest):
+    repo_path = get_safe_repo_path(repo_name)
+    file_path = os.path.abspath(os.path.join(repo_path, path))
+    
+    if not file_path.startswith(repo_path):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    try:
+        # Ensure directory exists just in case
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(request.content)
+        return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
